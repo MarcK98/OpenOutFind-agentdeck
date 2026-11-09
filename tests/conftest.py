@@ -139,3 +139,13 @@ def site_config(db, operator, configure):
     object either.
     """
     return configure()
+
+
+@pytest.fixture(autouse=True)
+def _hub_enabled_for_upstream_tests(request, monkeypatch):
+    """The AgentDeck fork ships with the hub off. Upstream hub-protocol tests exercise
+    the (dormant) code with it switched on; tests/test_hub_disabled.py runs it off."""
+    if request.node.get_closest_marker("hub_off"):
+        return
+    from openoutfind.contacts import service
+    monkeypatch.setattr(service, "HUB_ENABLED", True)

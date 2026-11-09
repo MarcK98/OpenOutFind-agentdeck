@@ -27,6 +27,9 @@ from openoutfind.core import version
 logger = logging.getLogger(__name__)
 
 HUB_URL = "https://hub.openoutreach.app"
+# AgentDeck fork: the hub is permanently off. No lead, email or operator identity
+# leaves this machine. Every public hub entry point returns before any network call.
+HUB_ENABLED = False
 _TIMEOUT_S = 30
 
 # The token this process is using, when it was not given one. It is not written down:
@@ -62,6 +65,8 @@ def token_in_hand(config: SiteConfig, *, mint: bool = True) -> str:
     is what a read-only verb wants: ``status`` reports a balance, and registering an
     install as a side effect of asking a question is not reporting.
     """
+    if not HUB_ENABLED:
+        return ""
     global _minted_token
 
     if config.contacts_api_token:
@@ -74,6 +79,8 @@ def token_in_hand(config: SiteConfig, *, mint: bool = True) -> str:
 def resolve(lead) -> str | None:
     """A stored email for *lead*, or ``None`` — a miss, no token yet, or an
     outage all return ``None``, so the caller falls back to BetterContact."""
+    if not HUB_ENABLED:
+        return None
     config = SiteConfig.load()
     token = token_in_hand(config)
     if not token:
@@ -123,6 +130,8 @@ def contribute(lead, emails: list[str], origin: str) -> None:
     with their discovery page (``share_profiles``). An operator who declares none contributes; the server
     re-gates every record authoritatively.
     """
+    if not HUB_ENABLED:
+        return
     operator_country = SiteConfig.load().operator_country_code
     if operator_country and is_eea_located(operator_country):
         logger.debug("hub: operator in EEA/UK/CH — skipping give-back for %s", lead.profile_url)
@@ -169,6 +178,8 @@ def share_profiles(rows: list[dict], country_code: str, vectors: dict) -> None:
     The same gates as ``contribute``: an operator in the EEA/UK/CH sends nothing, and a
     page searched in one — or in no named country — is not sent. The hub gates again.
     """
+    if not HUB_ENABLED:
+        return
     rows = [row for row in rows if row.get("contact_linkedin_profile_url")]
     token = _page_token(country_code) if rows else ""
     if not token:
@@ -186,6 +197,8 @@ def share_companies(rows: list[dict], country_code: str, vectors: dict) -> None:
     about anyone; the page's gates still hold, so an install that may not share the page
     shares none of it. ``vectors`` holds the vectors already made (``_vectors_for``).
     """
+    if not HUB_ENABLED:
+        return
     from openoutfind.discovery import company_records
 
     records = company_records(rows)
@@ -283,6 +296,8 @@ def register_operator() -> bool:
     Carries the build sha, so which version an install runs is known from its first
     minute rather than from its first contribution.
     """
+    if not HUB_ENABLED:
+        return False
     return bool(token_in_hand(SiteConfig.load()))
 
 
@@ -315,6 +330,8 @@ def hub_balance() -> dict:
     since the two must not look alike to a caller deciding whether to explain the
     store as empty or as closed.
     """
+    if not HUB_ENABLED:
+        return {"balance": None, "known": False}
     token = token_in_hand(SiteConfig.load(), mint=False)
     if not token:
         return {"balance": None, "known": False}
@@ -350,6 +367,8 @@ def _register(record: dict, lead) -> None:
 
 def _mint(body: dict, lead=None) -> str:
     """POST to ``register`` and return whatever token comes back — "" if none did."""
+    if not HUB_ENABLED:
+        return ""
     response = _send("register", body, lead)
     token = (response or {}).get("token") or ""
     if token:
@@ -365,6 +384,8 @@ def _send(path: str, body: dict, lead=None,
     record has none, and must not be narrated as a contribution — it gave nothing,
     and the hub may answer it without a ``credits`` field at all.
     """
+    if not HUB_ENABLED:
+        return None
     try:
         resp = requests.post(_endpoint(path), json=body,
                              headers=headers or _headers(), timeout=_TIMEOUT_S)
